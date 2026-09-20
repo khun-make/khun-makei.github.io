@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🎣 เกมตกปลา</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: sans-serif;
+    background: linear-gradient(180deg, #87CEEB 0%, #4A90D9 100%);
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 20px;
+  }
+  #game {
+    background: white;
+    border-radius: 20px;
+    padding: 25px;
+    max-width: 400px;
+    width: 100%;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+  }
+  h1 { text-align: center; color: #2c5aa0; margin-bottom: 15px; font-size: 24px; }
+  .stat {
+    display: flex;
+    justify-content: space-between;
+    padding: 10px;
+    background: #f0f4f8;
+    border-radius: 10px;
+    margin-bottom: 10px;
+    font-weight: bold;
+    color: #333;
+  }
+  #fishDisplay {
+    text-align: center;
+    font-size: 60px;
+    height: 90px;
+    margin: 15px 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  button {
+    width: 100%;
+    padding: 15px;
+    margin: 6px 0;
+    border: none;
+    border-radius: 12px;
+    font-size: 16px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: transform 0.1s;
+  }
+  button:active { transform: scale(0.97); }
+  .btn-fish { background: #4A90D9; color: white; }
+  .btn-sell { background: #27ae60; color: white; }
+  .btn-upgrade { background: #f39c12; color: white; }
+  .btn-save { background: #8e44ad; color: white; font-size: 14px; padding: 10px; }
+  .btn-load { background: #e74c3c; color: white; font-size: 14px; padding: 10px; }
+  .btn-row { display: flex; gap: 8px; }
+  #log {
+    background: #fffbe6;
+    border-radius: 10px;
+    padding: 10px;
+    margin-top: 10px;
+    font-size: 13px;
+    min-height: 40px;
+    color: #555;
+    text-align: center;
+  }
+  #saveArea {
+    width: 100%;
+    height: 60px;
+    margin-top: 8px;
+    padding: 8px;
+    border: 2px solid #ddd;
+    border-radius: 8px;
+    font-size: 11px;
+    font-family: monospace;
+    resize: none;
+  }
+  .section-title {
+    font-size: 12px;
+    color: #888;
+    margin-top: 15px;
+    margin-bottom: 5px;
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+<div id="game">
+  <h1>🎣 เกมตกปลา</h1>
+
+  <div class="stat">
+    <span>💰 เงิน: <span id="money">0</span></span>
+    <span>⬆️ เบ็ด Lv.<span id="rodLevel">1</span></span>
+  </div>
+  <div class="stat">
+    <span>🐟 ปลาที่จับได้: <span id="totalCaught">0</span></span>
+    <span>🏆 สถิติ: <span id="bestFish">-</span></span>
+  </div>
+
+  <div id="fishDisplay">🌊</div>
+  <div id="log">กดปุ่มตกปลาเพื่อเริ่ม!</div>
+
+  <button class="btn-fish" onclick="fish()">🎣 ตกปลา</button>
+  <button class="btn-sell" onclick="sellAll()">💰 ขายปลาทั้งหมด</button>
+  <button class="btn-upgrade" onclick="upgrade()">⬆️ อัปเกรดเบ็ด (100)</button>
+
+  <div class="section-title">─── ระบบเซฟ ───</div>
+  <div class="btn-row">
+    <button class="btn-save" onclick="generateSave()">📋 สร้างโค้ดเซฟ</button>
+    <button class="btn-load" onclick="loadSave()">📥 โหลดโค้ด</button>
+  </div>
+  <textarea id="saveArea" placeholder="โค้ดเซฟจะแสดงที่นี่... หรือวางโค้ดเซฟแล้วกดโหลด"></textarea>
+</div>
+
+<script>
+// ===== ข้อมูลเกม =====
+let state = {
+  money: 0,
+  rodLevel: 1,
+  totalCaught: 0,
+  bestFish: 0,
+  inventory: [], // ปลาที่จับได้แต่ยังไม่ขาย
+  version: 1
+};
+
+// ===== รายการปลา =====
+const FISH_LIST = [
+  { name: "ปลาเล็ก",     emoji: "🐟", price: 10,   chance: 40, minSize: 5,  maxSize: 15 },
+  { name: "ปลาทอง",      emoji: "🐠", price: 25,   chance: 25, minSize: 8,  maxSize: 25 },
+  { name: "ปลาบู่",      emoji: "🐡", price: 50,   chance: 15, minSize: 15, maxSize: 35 },
+  { name: "ปลาหมึก",     emoji: "🦑", price: 100,  chance: 10, minSize: 20, maxSize: 50 },
+  { name: "กุ้ง",        emoji: "🦐", price: 150,  chance: 6,  minSize: 10, maxSize: 30 },
+  { name: "ปู",          emoji: "🦀", price: 200,  chance: 3,  minSize: 15, maxSize: 40 },
+  { name: "ปลาฉลาม",     emoji: "🦈", price: 500,  chance: 1,  minSize: 50, maxSize: 150 },
+];
+
+// ===== ฟังก์ชันตกปลา =====
+function fish() {
+  // โบนัสจาก level เบ็ด
+  const luckBonus = state.rodLevel * 2;
+  
+  // สุ่มปลา
+  const roll = Math.random() * 100;
+  let cumulative = 0;
+  let caught = null;
+  
+  for (let f of FISH_LIST) {
+    let adjustedChance = f.chance;
+    // เบ็ดระดับสูง → เพิ่มโอกาสได้ปลาหายาก
+    if (f.price >= 100) adjustedChance += luckBonus;
+    cumulative += adjustedChance;
+    if (roll <= cumulative) { caught = f; break; }
+  }
+  if (!caught) caught = FISH_LIST[0];
+  
+  // สุ่มขนาด
+  const size = Math.floor(Math.random() * (caught.maxSize - caught.minSize + 1)) + caught.minSize;
+  
+  // เพิ่มเข้า inventory
+  state.inventory.push({ ...caught, size });
+  state.totalCaught++;
+  if (size > state.bestFish) state.bestFish = size;
+  
+  // แสดงผล
+  document.getElementById("fishDisplay").textContent = caught.emoji;
+  document.getElementById("log").textContent = 
+    `จับได้ ${caught.name} ${caught.emoji} ขนาด ${size} ซม. (ราคา ${caught.price})`;
+  
+  updateUI();
+}
+
+// ===== ขายปลา =====
+function sellAll() {
+  if (state.inventory.length === 0) {
+    document.getElementById("log").textContent = "ไม่มีปลาให้ขาย!";
+    return;
+  }
+  let total = 0;
+  for (let f of state.inventory) total += f.price;
+  state.money += total;
+  const count = state.inventory.length;
+  state.inventory = [];
+  document.getElementById("fishDisplay").textContent = "💰";
+  document.getElementById("log").textContent = `ขายปลา ${count} ตัว ได้เงิน ${total} บาท!`;
+  updateUI();
+}
+
+// ===== อัปเกรดเบ็ด =====
+function upgrade() {
+  const cost = state.rodLevel * 100;
+  if (state.money < cost) {
+    document.getElementById("log").textContent = `เงินไม่พอ! ต้องมี ${cost} บาท`;
+    return;
+  }
+  state.money -= cost;
+  state.rodLevel++;
+  document.getElementById("log").textContent = `อัปเกรดเบ็ดสำเร็จ! ตอนนี้ Lv.${state.rodLevel}`;
+  updateUI();
+}
+
+// ===== อัปเดต UI =====
+function updateUI() {
+  document.getElementById("money").textContent = state.money.toLocaleString();
+  document.getElementById("rodLevel").textContent = state.rodLevel;
+  document.getElementById("totalCaught").textContent = state.totalCaught;
+  document.getElementById("bestFish").textContent = state.bestFish ? state.bestFish + " ซม." : "-";
+  document.querySelector(".btn-upgrade").textContent = `⬆️ อัปเกรดเบ็ด (${state.rodLevel * 100})`;
+}
+
+// ===== ระบบ Save Code =====
+function generateSave() {
+  try {
+    // แปลง state เป็น JSON → เข้ารหัส Base64
+    const json = JSON.stringify(state);
+    const encoded = btoa(unescape(encodeURIComponent(json)));
+    
+    // เพิ่ม checksum กันแก้ (แบบง่าย)
+    let checksum = 0;
+    for (let i = 0; i < encoded.length; i++) {
+      checksum = (checksum + encoded.charCodeAt(i)) % 9999;
+    }
+    const saveCode = `FISH1-${checksum}-${encoded}`;
+    
+    document.getElementById("saveArea").value = saveCode;
+    document.getElementById("log").textContent = 
+      "✅ สร้างโค้ดเซฟแล้ว! กดค้างเพื่อคัดลอกเก็บไว้";
+    
+    // auto copy ถ้าทำได้
+    navigator.clipboard?.writeText(saveCode).then(() => {
+      document.getElementById("log").textContent = 
+        "✅ สร้าง + คัดลอกโค้ดเซฟแล้ว! เก็บไว้ได้เลย";
+    }).catch(() => {});
+    
+  } catch (e) {
+    document.getElementById("log").textContent = "❌ สร้างโค้ดเซฟไม่ได้";
+  }
+}
+
+function loadSave() {
+  const code = document.getElementById("saveArea").value.trim();
+  if (!code) {
+    document.getElementById("log").textContent = "❌ วางโค้ดเซฟก่อน!";
+    return;
+  }
+  
+  try {
+    // แยกส่วน
+    const parts = code.split("-");
+    if (parts.length !== 3 || parts[0] !== "FISH1") {
+      throw new Error("รูปแบบโค้ดไม่ถูกต้อง");
+    }
+    
+    const checksum = parseInt(parts[1]);
+    const encoded = parts[2];
+    
+    // ตรวจ checksum
+    let calcChecksum = 0;
+    for (let i = 0; i < encoded.length; i++) {
+      calcChecksum = (calcChecksum + encoded.charCodeAt(i)) % 9999;
+    }
+    if (calcChecksum !== checksum) {
+      throw new Error("โค้ดเซฟเสียหาย或被แก้ไข");
+    }
+    
+    // decode
+    const json = decodeURIComponent(escape(atob(encoded)));
+    const loaded = JSON.parse(json);
+    
+    // ตรวจ version
+    if (loaded.version !== state.version) {
+      document.getElementById("log").textContent = "⚠️ โค้ดเซฟมาจากเวอร์ชันอื่น";
+    }
+    
+    state = loaded;
+    updateUI();
+    document.getElementById("fishDisplay").textContent = "✅";
+    document.getElementById("log").textContent = "✅ โหลดเซฟสำเร็จ!";
+    
+  } catch (e) {
+    document.getElementById("log").textContent = "❌ " + e.message;
+  }
+}
+
+// ===== เริ่มเกม =====
+updateUI();
+</script>
+</body>
+</html>
